@@ -8,6 +8,8 @@
 
 class UCameraComponent;
 class USpringArmComponent;
+class AShooterWeapon;
+class USHealthComponent;
 
 UCLASS()
 class MPSHOOTER_API AShooterCharacter : public ACharacter
@@ -35,6 +37,44 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USpringArmComponent* SpringArmComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UShooterHealthComponent* HealthComp;
+
+	bool bWantstoADS;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Player")
+	float ZoomedFOV;
+
+	float DefaultFOV;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Player", Meta = (ClampMin = 0.1, ClampMax = 100))
+	float ADSInterpSpeed;
+
+	void BeginADS();
+
+	void EndADS();
+
+	AShooterWeapon* CurrentWeapon;
+
+	void PullTrigger();
+
+	void ReleaseTrigger();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Player")
+	TSubclassOf<AShooterWeapon> StarterWeaponClass;
+
+	UPROPERTY(VisibleDefaultsOnly, Category = "Player")
+	FName WeaponAttachSocketName;
+
+	void BeginReload();
+
+	UFUNCTION()
+	void OnHealthChanged(UShooterHealthComponent* HealthComponent, float Health, float HealthDelta, const UDamageType* DamageType,  AController* InstigatedBy, AActor* DamageCauser);
+
+	// Flag if character died previously
+	UPROPERTY(BlueprintReadOnly, Category = "Player")
+	bool bDied;
 
 public:	
 	// Called every frame

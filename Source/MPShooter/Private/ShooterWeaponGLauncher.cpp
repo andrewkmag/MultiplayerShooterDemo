@@ -7,7 +7,7 @@
 void AShooterWeaponGLauncher::PullTrigger()
 {
 	AActor* WeaponOwner = GetOwner();
-	if (WeaponOwner)
+	if (WeaponOwner && ProjectileClass)
 	{
 		// Use Viewpoint of player camera
 		FVector EyeLocation;

@@ -10,6 +10,7 @@ class USceneComponent;
 class USkeletalMeshComponent;
 class UDamageType;
 class UParticleSystem;
+class UCameraShake;
 
 UCLASS()
 class MPSHOOTER_API AShooterWeapon : public AActor
@@ -43,18 +44,62 @@ protected:
 	UParticleSystem* MuzzleEffect;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapons")
-	UParticleSystem* ImpactEffect;
+	UParticleSystem* DefaultImpactEffect;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapons")
+	UParticleSystem* FleshImpactEffect;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapons")
 	UParticleSystem* TracerEffect;
-
-	UFUNCTION(BlueprintCallable, Category = "Weapons")
-	virtual void PullTrigger();
 	
 	bool LineTrace(FHitResult& Hit, FVector& ShotDirection, FVector& TraceEnd, FVector& TracerEndPoint);
 
+	UPROPERTY(EditDefaultsOnly, Category = "Weapons")
+	TSubclassOf<UCameraShake> FireCamShake;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapons")
+	float BaseDamage;
+
+	virtual void PullTrigger();
+
+	void CamShakeOnFire();
+
+	// Returns appropriate effect to be spawned based on surface type
+	// that is hit
+	UParticleSystem* GetEffectOnHitSurfaceType(FHitResult& Hit, EPhysicalSurface& SurfaceType);
+
+	FTimerHandle TimerHandle_TimeBetweenShots;
+
+	float LastFireTime;
+
+	// Amount of bullets fired per minute by weapon (RPM)
+	UPROPERTY(EditDefaultsOnly, Category = "Weapons")
+	float RateOfFire;
+
+	// Derived from RateOfFire
+	float TimeBetweenShots;
+	
+	// TODO: Ammo Implementation
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapons", Meta = (ClampMin = 0, ClampMax = 500))
+	int MaxLoadedAmmo;
+
+	int LoadedAmmo;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapons", Meta = (ClampMin = 0, ClampMax = 500))
+	int MaxReserveAmmo;
+
+	int ReserveAmmo;
+
+	
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+
+	void BeginFire();
+
+	void EndFire();
+	
+	void BeginReload();
 
 };
