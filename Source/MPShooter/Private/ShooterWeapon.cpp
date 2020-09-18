@@ -11,6 +11,7 @@
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "MPShooter.h"
 #include "TimerManager.h"
+#include "Net/UnrealNetwork.h"
 
 // Sets default values
 AShooterWeapon::AShooterWeapon()
@@ -37,6 +38,13 @@ AShooterWeapon::AShooterWeapon()
 	MaxLoadedAmmo = 30;
 	LoadedAmmo = MaxLoadedAmmo;
 	ReserveAmmo = MaxReserveAmmo;
+
+	// Replicates spawning of gun to clients attached to server
+	SetReplicates(true);
+
+	// Update tick rate	for network updates
+	NetUpdateFrequency = 66.0f;
+	MinNetUpdateFrequency = 33.0f;
 }
 
 // Called when the game starts or when spawned
@@ -47,7 +55,6 @@ void AShooterWeapon::BeginPlay()
 	TimeBetweenShots = 60 / RateOfFire;
 }
 
-
 // Called every frame
 void AShooterWeapon::Tick(float DeltaTime)
 {
@@ -57,19 +64,19 @@ void AShooterWeapon::Tick(float DeltaTime)
 
 void AShooterWeapon::PullTrigger()
 {
+	if (GetLocalRole() < ROLE_Authority)
+	{
+		ServerPullTrigger();
+	}
+
 	AActor* WeaponOwner = GetOwner();
 	if (WeaponOwner && LoadedAmmo-- > 0)
 	{
-		// Spawn MuzzleFlash if set
-		if (MuzzleEffect)
-		{
-			UGameplayStatics::SpawnEmitterAttached(MuzzleEffect, MeshComp, MuzzleSocketName);
-		}
-
 		FHitResult Hit;
 		FVector ShotDirection;
 		FVector TraceEnd;
 		FVector TracerEndPoint;
+		EPhysicalSurface SurfaceType = SurfaceType_Default;
 		
 		bool HitSuccess = LineTrace(Hit, ShotDirection, TraceEnd, TracerEndPoint);
 		if (HitSuccess)
@@ -80,16 +87,7 @@ void AShooterWeapon::PullTrigger()
 			{
 				
 				// Get SurfaceType on Hit
-				EPhysicalSurface SurfaceType = UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get());
-				
-				// Get surface type to spawn appropriate impact effect on that material
-				UParticleSystem* SelectedEffect = GetEffectOnHitSurfaceType(Hit, SurfaceType);
-
-				// Spawn SelectedEffect if set
-				if (SelectedEffect)
-				{
-					UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), SelectedEffect, Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
-				}
+				SurfaceType = UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get());
 
 				// Check if Hit was headshot and apply damage multiplier if true
 				float ActualDamage = BaseDamage;
@@ -99,22 +97,21 @@ void AShooterWeapon::PullTrigger()
 				}
 
 				UGameplayStatics::ApplyPointDamage(HitActor, ActualDamage, ShotDirection, Hit, WeaponOwner->GetInstigatorController(), this, DamageType);
+			
+				SpawnImpactEffect(SurfaceType, Hit.ImpactPoint);
 			}
 		}
 
-		// Spawn Tracer effect if set
-		if (TracerEffect)
-		{
-			FVector MuzzleLocation = MeshComp->GetSocketLocation(MuzzleSocketName);
-
-			UParticleSystemComponent* TracerComp = UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), TracerEffect, MuzzleLocation);
-			if (TracerComp)
-			{
-				TracerComp->SetVectorParameter(TracerTargetName, TracerEndPoint);
-			}
-		}
-
+		SpawnTracerEffect(TracerEndPoint);
 		CamShakeOnFire();
+
+		// Update struct when shot on server for clients to spawn tracer effects
+		if (GetLocalRole() == ROLE_Authority)
+		{
+			HitScanTrace.TraceEnd = TracerEndPoint;
+			HitScanTrace.SurfaceType = SurfaceType;
+			HitScanTrace.ReplicationCount++;
+		}
 
 		LastFireTime = GetWorld()->TimeSeconds;
 	}
@@ -154,6 +151,28 @@ bool AShooterWeapon::LineTrace(FHitResult& Hit, FVector& ShotDirection, FVector&
 	return false;
 }
 
+void AShooterWeapon::SpawnTracerEffect(FVector TracerEndPoint)
+{
+	// Spawn MuzzleFlash if set
+	if (MuzzleEffect)
+	{
+		UGameplayStatics::SpawnEmitterAttached(MuzzleEffect, MeshComp, MuzzleSocketName);
+	}
+
+	// Spawn Tracer effect if set
+	if (TracerEffect)
+	{
+		FVector MuzzleLocation = MeshComp->GetSocketLocation(MuzzleSocketName);
+
+		UParticleSystemComponent* TracerComp = UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), TracerEffect, MuzzleLocation);
+		if (TracerComp)
+		{
+			TracerComp->SetVectorParameter(TracerTargetName, TracerEndPoint);
+		}
+	}
+}
+
+
 void AShooterWeapon::CamShakeOnFire()
 {
 	APawn* MyOwner = Cast<APawn>(GetOwner());
@@ -167,11 +186,10 @@ void AShooterWeapon::CamShakeOnFire()
 	}
 }
 
-UParticleSystem* AShooterWeapon::GetEffectOnHitSurfaceType(FHitResult& Hit, EPhysicalSurface& SurfaceType)
+void AShooterWeapon::SpawnImpactEffect(EPhysicalSurface SurfaceType, FVector& ImpactPoint) 
 {
 
 	UParticleSystem* ResultEffect = nullptr;
-
 	switch (SurfaceType)
 	{
 	case SURFACE_FLESHDEFAULT:
@@ -183,7 +201,14 @@ UParticleSystem* AShooterWeapon::GetEffectOnHitSurfaceType(FHitResult& Hit, EPhy
 		break;
 	}
 
-	return ResultEffect;
+	if (ResultEffect)
+	{
+		FVector MuzzleLocation = MeshComp->GetSocketLocation(MuzzleSocketName);
+		FVector ShotDirection = ImpactPoint - MuzzleLocation;
+		ShotDirection.Normalize();
+
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ResultEffect, ImpactPoint, ShotDirection.Rotation());
+	}
 }
 
 void AShooterWeapon::BeginFire()
@@ -202,6 +227,12 @@ void AShooterWeapon::EndFire()
 
 void AShooterWeapon::BeginReload()
 {
+
+	if (GetLocalRole() < ROLE_Authority)
+	{
+		ServerBeginReload();
+	}
+
 	if (ReserveAmmo <= 0 || LoadedAmmo == MaxLoadedAmmo) return;
 
 	if (ReserveAmmo < (MaxLoadedAmmo - LoadedAmmo))
@@ -217,4 +248,37 @@ void AShooterWeapon::BeginReload()
 
 }
 
+void AShooterWeapon::ServerPullTrigger_Implementation()
+{
+	PullTrigger();
+}
 
+bool AShooterWeapon::ServerPullTrigger_Validate()
+{
+	return true;
+}
+
+void AShooterWeapon::ServerBeginReload_Implementation()
+{
+	BeginReload();
+}
+
+bool AShooterWeapon::ServerBeginReload_Validate()
+{
+	return true;
+}
+
+void AShooterWeapon::OnRep_HitScanTrace()
+{
+	// Play Visual Effects
+	SpawnTracerEffect(HitScanTrace.TraceEnd);
+	SpawnImpactEffect(HitScanTrace.SurfaceType, HitScanTrace.TraceEnd);
+}
+
+void AShooterWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// Replicate to everyone except owner to avoid playing effects twice
+	DOREPLIFETIME_CONDITION(AShooterWeapon, HitScanTrace, COND_SkipOwner);
+}

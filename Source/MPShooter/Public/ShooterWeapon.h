@@ -12,6 +12,25 @@ class UDamageType;
 class UParticleSystem;
 class UCameraShake;
 
+// Contains hitscan info from a line trace 
+// to be sent from client-to-client for spawning of effects
+USTRUCT()
+struct FHitScanTrace
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY()
+	TEnumAsByte<EPhysicalSurface> SurfaceType;
+	
+	// Vector packing with 0 decimal point precision
+	UPROPERTY()
+	FVector_NetQuantize TraceEnd;
+
+	UPROPERTY()
+	uint8 ReplicationCount;
+};
+
 UCLASS()
 class MPSHOOTER_API AShooterWeapon : public AActor
 {
@@ -54,6 +73,10 @@ protected:
 	
 	bool LineTrace(FHitResult& Hit, FVector& ShotDirection, FVector& TraceEnd, FVector& TracerEndPoint);
 
+	void SpawnTracerEffect(FVector TracerEndPoint);
+
+	void SpawnImpactEffect(EPhysicalSurface SurfaceType, FVector& ImpactPoint);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Weapons")
 	TSubclassOf<UCameraShake> FireCamShake;
 
@@ -62,11 +85,13 @@ protected:
 
 	virtual void PullTrigger();
 
-	void CamShakeOnFire();
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerPullTrigger();
 
-	// Returns appropriate effect to be spawned based on surface type
-	// that is hit
-	UParticleSystem* GetEffectOnHitSurfaceType(FHitResult& Hit, EPhysicalSurface& SurfaceType);
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerBeginReload();
+
+	void CamShakeOnFire();
 
 	FTimerHandle TimerHandle_TimeBetweenShots;
 
@@ -79,7 +104,7 @@ protected:
 	// Derived from RateOfFire
 	float TimeBetweenShots;
 	
-	// TODO: Ammo Implementation
+	// @TODO: Ammo Implementation & link with animations
 
 	UPROPERTY(EditDefaultsOnly, Category = "Weapons", Meta = (ClampMin = 0, ClampMax = 500))
 	int MaxLoadedAmmo;
@@ -91,7 +116,12 @@ protected:
 
 	int ReserveAmmo;
 
-	
+	UPROPERTY(ReplicatedUsing=OnRep_HitScanTrace)
+	FHitScanTrace HitScanTrace;
+
+	UFUNCTION()
+	void OnRep_HitScanTrace();
+
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;

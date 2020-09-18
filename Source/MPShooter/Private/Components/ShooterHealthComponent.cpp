@@ -3,6 +3,7 @@
 
 #include "Components/ShooterHealthComponent.h"
 #include "GameFramework/Actor.h"
+#include "Net/UnrealNetwork.h"
 
 // Sets default values for this component's properties
 UShooterHealthComponent::UShooterHealthComponent()
@@ -12,6 +13,8 @@ UShooterHealthComponent::UShooterHealthComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 
 	DefaultHealth = 100.0f;
+
+	SetIsReplicated(true);
 }
 
 
@@ -22,12 +25,12 @@ void UShooterHealthComponent::BeginPlay()
 
 	Health = DefaultHealth;
 
-	AActor* MyOwner = GetOwner();
-	if (MyOwner)
+	// Reduce health in Server only
+	if (GetOwnerRole() == ROLE_Authority)
 	{
+		AActor* MyOwner = GetOwner();
 		MyOwner->OnTakeAnyDamage.AddDynamic(this, &UShooterHealthComponent::HandleTakeAnyDamage);
 	}
-	
 }
 
 
@@ -51,5 +54,12 @@ void UShooterHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	// ...
+}
+
+void UShooterHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UShooterHealthComponent, Health);
 }
 

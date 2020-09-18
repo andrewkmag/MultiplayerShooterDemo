@@ -55,6 +55,7 @@ protected:
 
 	void EndADS();
 
+	UPROPERTY(Replicated)
 	AShooterWeapon* CurrentWeapon;
 
 	void PullTrigger();
@@ -73,7 +74,7 @@ protected:
 	void OnHealthChanged(UShooterHealthComponent* HealthComponent, float Health, float HealthDelta, const UDamageType* DamageType,  AController* InstigatedBy, AActor* DamageCauser);
 
 	// Flag if character died previously
-	UPROPERTY(BlueprintReadOnly, Category = "Player")
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player")
 	bool bDied;
 
 public:	
