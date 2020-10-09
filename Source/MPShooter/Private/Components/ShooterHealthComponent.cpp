@@ -33,6 +33,13 @@ void UShooterHealthComponent::BeginPlay()
 	}
 }
 
+void UShooterHealthComponent::OnRep_Health(float OldHealth)
+{
+	// Derive damage from difference in damage and parameter
+	float Damage = Health - OldHealth;
+
+	OnHealthChanged.Broadcast(this, Health, Damage, nullptr, nullptr, nullptr);
+}
 
 void UShooterHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser)
 {
