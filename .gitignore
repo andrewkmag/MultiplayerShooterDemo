@@ -4,3 +4,8 @@ Binaries/
 Intermediate/
 Saved/
 *.code-workspace
+Content/Maps/TestArenaMap.umap
+Content/UI/M_HealthIndicatorTest.uasset
+Content/UI/WBP_TestHUD.uasset
+Content/UI/T_HealthBarCircularTest3.uasset
+Content/Blueprints/BP_TestGameMode.uasset
